@@ -81,9 +81,11 @@ export default function BasketDrawer({ isOpen, onClose, basketItems, onUpdateQua
                     <img 
                       src={product.image_url || "https://images.openfoodfacts.org/images/icons/dist/packaging.svg"} 
                       alt={product.name}
-                      className="w-12 h-12 object-contain bg-white rounded-lg p-1 border border-slate-100 shrink-0"
+                      className="w-14 h-14 object-contain rounded-xl p-1 border border-slate-200 shrink-0 shadow-2xs"
+                      style={{ backgroundColor: '#ffffff' }}
                     />
                     <div className="min-w-0">
+
                       <h4 className="text-xs font-bold text-slate-800 truncate" title={product.name}>
                         {product.name}
                       </h4>

@@ -38,26 +38,30 @@ export default function ProductCard({ product, onAddToBasket, inBasketCount = 0 
       {/* Haut de carte: Image + Badges */}
       <div className="relative p-4 pb-0 flex items-start gap-4">
         
-        {/* Photo du produit */}
-        <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center p-2 shrink-0 overflow-hidden">
+        {/* Photo du produit nette sur fond blanc garanti */}
+        <div 
+          className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-2xl border border-slate-200/80 flex items-center justify-center p-2.5 shrink-0 overflow-hidden shadow-xs"
+          style={{ backgroundColor: '#ffffff' }}
+        >
           {product.image_url ? (
             <img
               src={product.image_url}
               alt={product.name}
-              className="w-full h-full object-contain mix-blend-multiply transition-transform hover:scale-105 duration-200"
+              className="w-full h-full object-contain transition-transform hover:scale-105 duration-200"
               loading="lazy"
             />
           ) : (
-            <span className="text-3xl">🛒</span>
+            <span className="text-4xl">🛒</span>
           )}
           
           {/* Badge Nutri-Score */}
           {product.nutriscore && NUTRISCORE_COLORS[product.nutriscore] && (
-            <div className={`absolute bottom-1 left-1 px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${NUTRISCORE_COLORS[product.nutriscore]}`}>
+            <div className={`absolute bottom-1.5 left-1.5 px-2 py-0.5 rounded-md text-[11px] font-black uppercase tracking-wider shadow-xs ${NUTRISCORE_COLORS[product.nutriscore]}`}>
               Nutri {product.nutriscore}
             </div>
           )}
         </div>
+
 
         {/* Informations produit */}
         <div className="flex-1 min-w-0">

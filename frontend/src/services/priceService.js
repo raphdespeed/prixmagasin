@@ -39,6 +39,12 @@ function normalizeRetailer(rawName) {
   return "Autre";
 }
 
+function getHighResImage(url) {
+  if (!url) return null;
+  // Remplacer les miniatures 200px ou small par du 400px HD
+  return url.replace(/\.200\./g, '.400.').replace(/\.small\./g, '.400.');
+}
+
 /**
  * Recherche des produits et leurs prix par enseigne
  * @param {string} query - Mot-clé (ex: "Nutella") ou code EAN (ex: "3017620422003")
@@ -57,12 +63,13 @@ export async function searchProductsAndPrices(query, maxResults = 8) {
       if (offRes.ok) {
         const offData = await offRes.json();
         const p = offData.product || {};
+        const rawImg = p.image_front_url || p.image_url || p.image_front_small_url || null;
         productsToCheck.push({
           ean: cleanQuery,
           name: p.product_name_fr || p.product_name || "Produit sans nom",
           brand: p.brands || "Marque inconnue",
           quantity: p.quantity || "",
-          imageUrl: p.image_front_small_url || p.image_url || null,
+          imageUrl: getHighResImage(rawImg),
           nutriscore: p.nutriscore_grade || null,
         });
       }
@@ -81,7 +88,7 @@ export async function searchProductsAndPrices(query, maxResults = 8) {
             name: item.product_name,
             brand: item.brands || "Marque",
             quantity: item.quantity || `${item.product_quantity || ''} ${item.product_quantity_unit || ''}`.trim(),
-            imageUrl: item.image_url || null,
+            imageUrl: getHighResImage(item.image_url),
             nutriscore: item.nutriscore_grade && item.nutriscore_grade !== "unknown" ? item.nutriscore_grade : null,
           });
         }
@@ -90,6 +97,7 @@ export async function searchProductsAndPrices(query, maxResults = 8) {
       console.warn("Erreur recherche Open Prices:", e);
     }
   }
+
 
   // Si aucun produit trouvé dans Open Prices et qu'il y a un mot clé, tenter une recherche de secours
   if (productsToCheck.length === 0) {
