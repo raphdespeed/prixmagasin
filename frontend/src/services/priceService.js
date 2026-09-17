@@ -50,11 +50,12 @@ function getHighResImage(url) {
  * @param {string} query - Mot-clé (ex: "Nutella") ou code EAN (ex: "3017620422003")
  * @param {number} maxResults - Nombre de produits
  */
-export async function searchProductsAndPrices(query, maxResults = 8) {
+export async function searchProductsAndPrices(query, maxResults = 24) {
   const cleanQuery = (query || "").trim();
   if (!cleanQuery) return { products: [], cities: [], retailers: [] };
 
   const isEan = /^\d{8,14}$/.test(cleanQuery);
+  const seenEans = new Set();
   let productsToCheck = [];
 
   if (isEan) {
@@ -78,25 +79,52 @@ export async function searchProductsAndPrices(query, maxResults = 8) {
     }
   } else {
     try {
+      // 1. Recherche par nom de produit
       const url = `${OPEN_PRICES_PRODUCTS_URL}?product_name__like=${encodeURIComponent(cleanQuery)}&size=${maxResults}&order_by=-price_count`;
       const res = await fetch(url, { headers: HEADERS });
       if (res.ok) {
         const data = await res.json();
         for (const item of data.items || []) {
-          productsToCheck.push({
-            ean: item.code,
-            name: item.product_name,
-            brand: item.brands || "Marque",
-            quantity: item.quantity || `${item.product_quantity || ''} ${item.product_quantity_unit || ''}`.trim(),
-            imageUrl: getHighResImage(item.image_url),
-            nutriscore: item.nutriscore_grade && item.nutriscore_grade !== "unknown" ? item.nutriscore_grade : null,
-          });
+          if (item.code && !seenEans.has(item.code)) {
+            seenEans.add(item.code);
+            productsToCheck.push({
+              ean: item.code,
+              name: item.product_name,
+              brand: item.brands || "Marque",
+              quantity: item.quantity || `${item.product_quantity || ''} ${item.product_quantity_unit || ''}`.trim(),
+              imageUrl: getHighResImage(item.image_url),
+              nutriscore: item.nutriscore_grade && item.nutriscore_grade !== "unknown" ? item.nutriscore_grade : null,
+            });
+          }
+        }
+      }
+
+      // 2. Recherche par marque si le mot-clé correspond (ex: Harrys, Barilla, Danone)
+      if (cleanQuery.length >= 3) {
+        const brandUrl = `${OPEN_PRICES_PRODUCTS_URL}?brands__like=${encodeURIComponent(cleanQuery)}&size=${maxResults}&order_by=-price_count`;
+        const bRes = await fetch(brandUrl, { headers: HEADERS });
+        if (bRes.ok) {
+          const bData = await bRes.json();
+          for (const item of bData.items || []) {
+            if (item.code && !seenEans.has(item.code)) {
+              seenEans.add(item.code);
+              productsToCheck.push({
+                ean: item.code,
+                name: item.product_name,
+                brand: item.brands || cleanQuery,
+                quantity: item.quantity || `${item.product_quantity || ''} ${item.product_quantity_unit || ''}`.trim(),
+                imageUrl: getHighResImage(item.image_url),
+                nutriscore: item.nutriscore_grade && item.nutriscore_grade !== "unknown" ? item.nutriscore_grade : null,
+              });
+            }
+          }
         }
       }
     } catch (e) {
       console.warn("Erreur recherche Open Prices:", e);
     }
   }
+
 
 
   // Si aucun produit trouvé dans Open Prices et qu'il y a un mot clé, tenter une recherche de secours
