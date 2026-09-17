@@ -1,7 +1,6 @@
 /**
  * Service de comparaison de prix 100% Client-Side
- * Compatible GitHub Pages (ne nécessite aucun serveur backend).
- * Interroge directement les APIs Open Prices et Open Food Facts depuis le navigateur.
+ * Avec moteur de tolérance aux fautes d'orthographe (Fuzzy Search & Levenshtein)
  */
 
 const OPEN_PRICES_PRODUCTS_URL = "https://prices.openfoodfacts.org/api/v1/products";
@@ -13,23 +12,99 @@ const HEADERS = {
 };
 
 /**
+ * Dictionnaire de termes et marques pour la correction automatique des fautes
+ */
+const COMMON_DICTIONARY = [
+  // Enseignes
+  "carrefour", "auchan", "leclerc", "intermarché", "lidl", "monoprix", "casino", "aldi", "colruyt", "super u",
+  // Marques populaires
+  "harrys", "barilla", "nutella", "danone", "pasquier", "président", "lactel", "nestlé", "lu", 
+  "bonduelle", "cristaline", "ferrero", "kinder", "evian", "heineken", "panzani", "chabrior", 
+  "fleury michon", "jacquet", "volvic", "perrier", "lipton", "san pellegrino", "carte noire",
+  "coca-cola", "pepsi", "oasis", "tropicana", "lays", "pringles", "st michel", "bonne maman",
+  "kiri", "vache qui rit", "babybel", "boursin", "caprice des dieux",
+  // Produits courants
+  "pain", "chocolat", "beurre", "lait", "pâtes", "fromage", "café", "yaourt", "jambon", "crème",
+  "biscuit", "eau", "confiture", "huile", "farine", "sucre", "riz", "oeufs", "sauce", "complet",
+  "croissant", "brioche", "céréales", "gateau", "jus", "biere", "vin", "saucisson", "poulet",
+  "thon", "saumon", "tomate", "pomme", "salade", "chips"
+];
+
+/**
+ * Calcul de la distance de Levenshtein (nombre de fautes de frappe)
+ */
+function levenshtein(a, b) {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+
+  const matrix = [];
+  for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+  for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1, // substitution
+          matrix[i][j - 1] + 1,     // insertion
+          matrix[i - 1][j] + 1      // suppression
+        );
+      }
+    }
+  }
+  return matrix[b.length][a.length];
+}
+
+/**
+ * Corrige les fautes de frappe dans la requête
+ */
+export function correctQuery(input) {
+  if (!input) return { query: input, isCorrected: false };
+  const words = input.toLowerCase().trim().split(/\s+/);
+  let isCorrected = false;
+
+  const correctedWords = words.map(w => {
+    // Normaliser en retirant les accents pour comparer
+    const normalizedW = w.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    if (normalizedW.length <= 2) return w;
+
+    let bestMatch = w;
+    let minDistance = 99;
+
+    for (const dictWord of COMMON_DICTIONARY) {
+      const normalizedDict = dictWord.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const d = levenshtein(normalizedW, normalizedDict);
+      const maxTol = normalizedW.length <= 4 ? 1 : 2; // 1 faute si mot court, 2 si long
+
+      if (d <= maxTol && d < minDistance) {
+        minDistance = d;
+        bestMatch = dictWord;
+      }
+    }
+
+    if (bestMatch !== w) {
+      isCorrected = true;
+    }
+    return bestMatch;
+  });
+
+  return {
+    query: correctedWords.join(" "),
+    isCorrected: isCorrected && correctedWords.join(" ") !== input.toLowerCase().trim()
+  };
+}
+
+/**
  * Normalise le nom de l'enseigne
  */
 function normalizeRetailer(rawName) {
   if (!rawName) return "Autre";
   const brands = [
-    "Carrefour",
-    "Auchan",
-    "E.Leclerc",
-    "Leclerc",
-    "Intermarché",
-    "Lidl",
-    "Monoprix",
-    "Super U",
-    "Système U",
-    "Casino",
-    "Aldi",
-    "Colruyt"
+    "Carrefour", "Auchan", "E.Leclerc", "Leclerc", "Intermarché", "Lidl", 
+    "Monoprix", "Super U", "Système U", "Casino", "Aldi", "Colruyt"
   ];
   for (const b of brands) {
     if (rawName.toLowerCase().includes(b.toLowerCase())) {
@@ -41,18 +116,15 @@ function normalizeRetailer(rawName) {
 
 function getHighResImage(url) {
   if (!url) return null;
-  // Remplacer les miniatures 200px ou small par du 400px HD
   return url.replace(/\.200\./g, '.400.').replace(/\.small\./g, '.400.');
 }
 
 /**
- * Recherche des produits et leurs prix par enseigne
- * @param {string} query - Mot-clé (ex: "Nutella") ou code EAN (ex: "3017620422003")
- * @param {number} maxResults - Nombre de produits
+ * Recherche des produits et leurs prix par enseigne avec tolérance aux fautes
  */
 export async function searchProductsAndPrices(query, maxResults = 24) {
   const cleanQuery = (query || "").trim();
-  if (!cleanQuery) return { products: [], cities: [], retailers: [] };
+  if (!cleanQuery) return { products: [], cities: [], retailers: [], correctedQuery: null };
 
   const isEan = /^\d{8,14}$/.test(cleanQuery);
   const seenEans = new Set();
@@ -77,10 +149,23 @@ export async function searchProductsAndPrices(query, maxResults = 24) {
     } catch (e) {
       console.warn("Erreur OFF par EAN:", e);
     }
-  } else {
+    return buildFinalResult(productsToCheck, null);
+  }
+
+  // Vérifier s'il y a une faute de frappe corrigée
+  const correction = correctQuery(cleanQuery);
+  const searchTerms = [cleanQuery];
+  if (correction.isCorrected && !searchTerms.includes(correction.query)) {
+    searchTerms.push(correction.query);
+  }
+
+  // Rechercher pour les termes (terme original + terme corrigé si applicable)
+  for (const term of searchTerms) {
+    if (productsToCheck.length >= maxResults) break;
+
     try {
       // 1. Recherche par nom de produit
-      const url = `${OPEN_PRICES_PRODUCTS_URL}?product_name__like=${encodeURIComponent(cleanQuery)}&size=${maxResults}&order_by=-price_count`;
+      const url = `${OPEN_PRICES_PRODUCTS_URL}?product_name__like=${encodeURIComponent(term)}&size=${maxResults}&order_by=-price_count`;
       const res = await fetch(url, { headers: HEADERS });
       if (res.ok) {
         const data = await res.json();
@@ -99,9 +184,9 @@ export async function searchProductsAndPrices(query, maxResults = 24) {
         }
       }
 
-      // 2. Recherche par marque si le mot-clé correspond (ex: Harrys, Barilla, Danone)
-      if (cleanQuery.length >= 3) {
-        const brandUrl = `${OPEN_PRICES_PRODUCTS_URL}?brands__like=${encodeURIComponent(cleanQuery)}&size=${maxResults}&order_by=-price_count`;
+      // 2. Recherche par marque
+      if (term.length >= 3) {
+        const brandUrl = `${OPEN_PRICES_PRODUCTS_URL}?brands__like=${encodeURIComponent(term)}&size=${maxResults}&order_by=-price_count`;
         const bRes = await fetch(brandUrl, { headers: HEADERS });
         if (bRes.ok) {
           const bData = await bRes.json();
@@ -111,7 +196,7 @@ export async function searchProductsAndPrices(query, maxResults = 24) {
               productsToCheck.push({
                 ean: item.code,
                 name: item.product_name,
-                brand: item.brands || cleanQuery,
+                brand: item.brands || term,
                 quantity: item.quantity || `${item.product_quantity || ''} ${item.product_quantity_unit || ''}`.trim(),
                 imageUrl: getHighResImage(item.image_url),
                 nutriscore: item.nutriscore_grade && item.nutriscore_grade !== "unknown" ? item.nutriscore_grade : null,
@@ -125,18 +210,20 @@ export async function searchProductsAndPrices(query, maxResults = 24) {
     }
   }
 
+  return await buildFinalResult(productsToCheck, correction.isCorrected ? correction.query : null);
+}
 
-
-  // Si aucun produit trouvé dans Open Prices et qu'il y a un mot clé, tenter une recherche de secours
+/**
+ * Construit la liste finale avec les prix associés
+ */
+async function buildFinalResult(productsToCheck, correctedQuery) {
   if (productsToCheck.length === 0) {
-    return { products: [], cities: [], retailers: [] };
+    return { products: [], cities: [], retailers: [], correctedQuery };
   }
 
   const allCities = new Set();
   const allRetailers = new Set();
-  const finalProducts = [];
 
-  // Récupérer les prix en parallèle pour chaque produit
   const pricePromises = productsToCheck.map(async (prod) => {
     if (!prod.ean) return null;
 
@@ -159,7 +246,6 @@ export async function searchProductsAndPrices(query, maxResults = 24) {
           allRetailers.add(retailer);
           if (loc.osm_address_city) allCities.add(loc.osm_address_city);
 
-          // Ne conserver que le prix le plus bas pour chaque enseigne
           if (!pricesByRetailer[retailer] || numPrice < pricesByRetailer[retailer].price) {
             pricesByRetailer[retailer] = {
               retailer: retailer,
@@ -200,20 +286,19 @@ export async function searchProductsAndPrices(query, maxResults = 24) {
         prices: sortedPrices,
       };
     } catch (err) {
-      console.warn(`Erreur récupération prix pour ${prod.ean}:`, err);
+      console.warn(`Erreur prix ${prod.ean}:`, err);
       return null;
     }
   });
 
   const results = await Promise.all(pricePromises);
   const filtered = results.filter(Boolean);
-
-  // Trier pour mettre en premier les produits ayant des comparaisons de prix
   filtered.sort((a, b) => b.prices.length - a.prices.length);
 
   return {
     products: filtered,
     cities: Array.from(allCities).sort().slice(0, 20),
     retailers: Array.from(allRetailers).sort(),
+    correctedQuery: correctedQuery
   };
 }

@@ -29,6 +29,7 @@ export default function App() {
   const [availableRetailers, setAvailableRetailers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [correctedQuery, setCorrectedQuery] = useState(null);
 
   // Panier stocké dans le localStorage
   const [basket, setBasket] = useState(() => {
@@ -53,10 +54,11 @@ export default function App() {
     setError(null);
 
     try {
-      const data = await searchProductsAndPrices(keyword, 8);
+      const data = await searchProductsAndPrices(keyword, 24);
       setProducts(data.products || []);
       setAvailableCities(data.cities || []);
       setAvailableRetailers(data.retailers || []);
+      setCorrectedQuery(data.correctedQuery || null);
     } catch (err) {
       console.error(err);
       setError("Une erreur est survenue lors de la récupération des prix.");
@@ -64,6 +66,7 @@ export default function App() {
       setLoading(false);
     }
   };
+
 
   useEffect(() => {
     fetchProducts(query);
@@ -173,7 +176,22 @@ export default function App() {
             </div>
           </form>
 
+          {/* Pastille de correction de faute d'orthographe */}
+          {correctedQuery && (
+            <div className="mt-3 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-amber-50 border border-amber-200/90 text-amber-900 text-xs font-medium shadow-xs animate-in fade-in">
+              <span>💡 Faute de frappe détectée : résultats affichés pour</span>
+              <button
+                type="button"
+                onClick={() => { setSearchInput(correctedQuery); setQuery(correctedQuery); }}
+                className="font-bold underline text-amber-950 hover:text-emerald-700 cursor-pointer"
+              >
+                "{correctedQuery}"
+              </button>
+            </div>
+          )}
+
           {/* Suggestions rapides */}
+
           <div className="mt-4 flex flex-wrap items-center justify-center gap-1.5 text-xs">
             <span className="text-slate-400 font-medium mr-1">Recherches populaires :</span>
             {SUGGESTIONS.map(s => (
