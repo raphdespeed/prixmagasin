@@ -3,7 +3,9 @@ import { Search, RefreshCw, Filter, Sparkles, AlertCircle } from 'lucide-react';
 import Navbar from './components/Navbar';
 import ProductCard from './components/ProductCard';
 import BasketDrawer from './components/BasketDrawer';
+import ProductModal from './components/ProductModal';
 import { searchProductsAndPrices } from './services/priceService';
+
 
 const SUGGESTIONS = [
   "Nutella",
@@ -38,6 +40,7 @@ export default function App() {
     }
   });
   const [isBasketOpen, setIsBasketOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState(null);
 
   useEffect(() => {
     localStorage.setItem('prixmagasin_basket', JSON.stringify(basket));
@@ -284,6 +287,7 @@ export default function App() {
                   key={product.ean}
                   product={product}
                   onAddToBasket={handleAddToBasket}
+                  onOpenModal={setSelectedProduct}
                   inBasketCount={inBasketItem ? inBasketItem.quantity : 0}
                 />
               );
@@ -314,6 +318,19 @@ export default function App() {
         onUpdateQuantity={handleUpdateQuantity}
         onRemoveItem={handleRemoveFromBasket}
       />
+
+      {/* Modal Agrandissement Produit */}
+      <ProductModal
+        product={selectedProduct}
+        onClose={() => setSelectedProduct(null)}
+        onAddToBasket={handleAddToBasket}
+        inBasketCount={
+          selectedProduct
+            ? (basket.find(it => it.product.ean === selectedProduct.ean)?.quantity || 0)
+            : 0
+        }
+      />
+
 
       {/* Footer */}
       <footer className="bg-white border-t border-slate-200 py-6 px-4 text-center text-xs text-slate-500 mt-12">

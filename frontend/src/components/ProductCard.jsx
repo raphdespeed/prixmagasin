@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Check, ExternalLink, Zap, ChevronDown, ChevronUp, MapPin, Tag } from 'lucide-react';
+import { Plus, Check, ExternalLink, Zap, ChevronDown, ChevronUp, MapPin, Tag, ZoomIn } from 'lucide-react';
 
 const RETAILER_COLORS = {
   'Carrefour': 'bg-blue-50 text-blue-700 border-blue-200',
@@ -20,7 +20,7 @@ const NUTRISCORE_COLORS = {
   'e': 'bg-red-600 text-white'
 };
 
-export default function ProductCard({ product, onAddToBasket, inBasketCount = 0 }) {
+export default function ProductCard({ product, onAddToBasket, onOpenModal, inBasketCount = 0 }) {
   const [showAllPrices, setShowAllPrices] = useState(false);
   const [justAdded, setJustAdded] = useState(false);
 
@@ -38,21 +38,30 @@ export default function ProductCard({ product, onAddToBasket, inBasketCount = 0 
       {/* Haut de carte: Image + Badges */}
       <div className="relative p-4 pb-0 flex items-start gap-4">
         
-        {/* Photo du produit nette sur fond blanc garanti */}
+        {/* Photo du produit nette sur fond blanc garanti avec clic zoom */}
         <div 
-          className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-2xl border border-slate-200/80 flex items-center justify-center p-2.5 shrink-0 overflow-hidden shadow-xs"
+          onClick={() => onOpenModal && onOpenModal(product)}
+          className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-2xl border border-slate-200/80 flex items-center justify-center p-2.5 shrink-0 overflow-hidden shadow-xs cursor-pointer group hover:border-emerald-400 transition"
           style={{ backgroundColor: '#ffffff' }}
+          title="Cliquer pour agrandir le produit"
         >
           {product.image_url ? (
             <img
               src={product.image_url}
               alt={product.name}
-              className="w-full h-full object-contain transition-transform hover:scale-105 duration-200"
+              className="w-full h-full object-contain transition-transform group-hover:scale-108 duration-200"
               loading="lazy"
             />
           ) : (
             <span className="text-4xl">🛒</span>
           )}
+
+          {/* Pastille Zoom au survol */}
+          <div className="absolute inset-0 bg-slate-900/10 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity rounded-2xl">
+            <span className="bg-white/90 text-slate-800 p-1.5 rounded-full shadow-md">
+              <ZoomIn className="w-5 h-5 text-emerald-600" />
+            </span>
+          </div>
           
           {/* Badge Nutri-Score */}
           {product.nutriscore && NUTRISCORE_COLORS[product.nutriscore] && (
@@ -75,7 +84,11 @@ export default function ProductCard({ product, onAddToBasket, inBasketCount = 0 
             )}
           </div>
           
-          <h3 className="text-base font-bold text-slate-900 leading-snug line-clamp-2 mt-0.5" title={product.name}>
+          <h3 
+            onClick={() => onOpenModal && onOpenModal(product)}
+            className="text-base font-bold text-slate-900 hover:text-emerald-700 leading-snug line-clamp-2 mt-0.5 cursor-pointer transition" 
+            title="Cliquer pour voir en grand format"
+          >
             {product.name}
           </h3>
 
